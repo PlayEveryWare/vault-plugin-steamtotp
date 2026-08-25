@@ -1,0 +1,44 @@
+name: Publish release
+on:
+  push:
+    tags:
+    - 'v*'
+
+jobs:
+  release:
+    name: Publish new release
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v6
+
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: ./go.mod
+
+    - name: Test
+      run: |
+        export PATH=$PATH:$(go env GOPATH)/bin
+        go test ./...
+
+    - name: Build
+      run: |
+        export PATH=$PATH:$(go env GOPATH)/bin
+        export CGO_ENABLED=0
+        go install github.com/mitchellh/gox@latest
+        gox -os="linux darwin windows" -arch "amd64 arm64" -output "build/vault-plugin-steamtotp-{{.OS}}-{{.Arch}}" ./cmd/vault-plugin-steamtotp
+
+        pushd ./build
+          find . -type f -name "vault-plugin-steamtotp*" | xargs sha256sum > ../vault-plugin-steamtotp.sha256sums
+        popd
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        name: Release ${{ github.ref }}
+        draft: false
+        files: |
+          ./build/vault-plugin-steamtotp*
+          ./vault-plugin-steamtotp.sha256sums
